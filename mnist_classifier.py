@@ -227,9 +227,15 @@ class LightningMNISTClassifier(pl.LightningModule):
         return [self.optimizer], [self.scheduler]
 
 
+# This wrapper is needed for deploying model on mlflow server
+# The server API can accept data only in the pandas Dataframe tabular format
+# where each row represents a single data point and each column stands for a feature.
+# Thus we need to encode our images so that they could be stored in a single Dataframe row.
+#
+# This object should only be used if you're up to deploy the trained model on the mlflow server.
 class MNISTClassifierWrapper(mlflow.pyfunc.PythonModel):
 
-    def __init__(self, map_location=None, input_dim=(128, 128, 3)):
+    def __init__(self, map_location=None, input_dim=(1, 28, 28)):
         super(MNISTClassifierWrapper, self).__init__()
         self.map_location = map_location
         self.input_dim = input_dim
@@ -247,9 +253,9 @@ class MNISTClassifierWrapper(mlflow.pyfunc.PythonModel):
 
         images = [torch.tensor(decode_img(x)).to(self.map_location) for x in model_input['image'].values]
 
-        input = torch.cat(images, dim=0)
+        input = torch.cat(images, dim=0).float()
         with torch.no_grad():
-            output = torch.sigmoid(self._detector(input))
+            output = torch.argmax(self._detector(input), 1)
             return output.cpu().numpy().reshape((-1))
 
     @staticmethod
@@ -268,6 +274,7 @@ if __name__ == "__main__":
     parser = pl.Trainer.add_argparse_args(parent_parser=parser)
     parser = LightningMNISTClassifier.add_model_specific_args(parent_parser=parser)
 
+    # Turn on autologging
     mlflow.pytorch.autolog(log_every_n_epoch=2)
 
     args = parser.parse_args()
@@ -281,9 +288,14 @@ if __name__ == "__main__":
     dm.prepare_data()
     dm.setup(stage="fit")
 
+    # All manual logging and model saving should be done inside the current mlflow experiment context.
+    # Otherwise the autologged metrics and checkpoints will get lost.
     with mlflow.start_run():
         model = LightningMNISTClassifier(**dict_args)
         trainer = pl.Trainer.from_argparse_args(args)
         trainer.fit(model, dm)
         trainer.test()
+
+        # By default the mlflow autologger stores checkpoints in the native pytorch format.
+        # We need to manually save the model inside our wrapper for deploying to mlflow server.
         MNISTClassifierWrapper.export_best_model(trainer, 'cpu')
