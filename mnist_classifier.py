@@ -227,13 +227,15 @@ class LightningMNISTClassifier(pl.LightningModule):
         return [self.optimizer], [self.scheduler]
 
 
-# This wrapper is needed for deploying model on mlflow server
-# The server API can accept data only in the pandas Dataframe tabular format
-# where each row represents a single data point and each column stands for a feature.
-# Thus we need to encode our images so that they could be stored in a single Dataframe row.
-#
-# This object should only be used if you're up to deploy the trained model on the mlflow server.
 class MNISTClassifierWrapper(mlflow.pyfunc.PythonModel):
+    """
+    This wrapper is needed for deploying model on mlflow server
+    The server API can accept data only in the pandas Dataframe tabular format
+    where each row represents a single data point and each column stands for a feature.
+    Thus we need to encode our images so that they could be stored in a single Dataframe row.
+
+    This object should only be used if you're up to deploy the trained model on the mlflow server.
+    """
 
     def __init__(self, map_location=None, input_dim=(28, 28, 1)):
         super(MNISTClassifierWrapper, self).__init__()
