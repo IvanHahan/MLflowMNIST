@@ -27,4 +27,4 @@ class MNISTClassifierClient:
 if __name__ == '__main__':
     client = MNISTClassifierClient()
     x = np.random.randint(0, 255, (2, 1, 28, 28), dtype='uint8')  # batch x channel x height x width
-    client.predict(x)
+    print(client.predict(x))

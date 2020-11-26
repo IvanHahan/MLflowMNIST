@@ -235,10 +235,13 @@ class LightningMNISTClassifier(pl.LightningModule):
 # This object should only be used if you're up to deploy the trained model on the mlflow server.
 class MNISTClassifierWrapper(mlflow.pyfunc.PythonModel):
 
-    def __init__(self, map_location=None, input_dim=(1, 28, 28)):
+    def __init__(self, map_location=None, input_dim=(28, 28, 1)):
         super(MNISTClassifierWrapper, self).__init__()
         self.map_location = map_location
         self.input_dim = input_dim
+        self.transform = transforms.Compose(
+            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+        )
 
     def load_context(self, context):
         self._detector = LightningMNISTClassifier.load_from_checkpoint(context.artifacts['model_state'],
@@ -249,9 +252,10 @@ class MNISTClassifierWrapper(mlflow.pyfunc.PythonModel):
         def decode_img(x):
             r = base64.decodebytes(bytes(x, encoding='utf-8'))
             q = np.frombuffer(r, dtype='uint8').reshape(self.input_dim)
+            q = np.array(q)
             return q
 
-        images = [torch.tensor(decode_img(x)).to(self.map_location) for x in model_input['image'].values]
+        images = [self.transform(decode_img(x)).to(self.map_location) for x in model_input['image'].values]
 
         input = torch.cat(images, dim=0).float()
         with torch.no_grad():
